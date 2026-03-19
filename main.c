@@ -69,6 +69,14 @@ void deline(){ // TEST
 void insline(){ // TEST
     printf("\033[L");
 }
+void highvideo(){
+    printf("\033[1m");
+}
+
+void lowvideo(){
+    printf("\033[2m");
+}
+
 
 void resetcolor() {printf("\033[0m");}
 int main (){
