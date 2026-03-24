@@ -1,4 +1,9 @@
 #include <stdio.h>
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdarg.h>
+
 #define BLACK         0
 #define BLUE          1
 #define GREEN         2
@@ -63,10 +68,10 @@ void wherey(){
     printf("Current Y: %d\n", y);
 }
 
-void deline(){ // TEST
+void deline(){
     printf("\033[M");
 }
-void insline(){ // TEST
+void insline(){
     printf("\033[L");
 }
 void highvideo(){
@@ -77,8 +82,84 @@ void lowvideo(){
     printf("\033[2m");
 }
 
+int getch() {
+    struct termios oldt, newt;
+    int ch;
+
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    ch = getchar();
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return ch;
+}
+
+int getche() {
+    struct termios oldt, newt;
+    int ch;
+
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt.c_lflag &= ~ICANON;   
+    newt.c_lflag |= ECHO;      
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    ch = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return ch; 
+}
+
+int kbhit() {
+    struct termios oldt, newt;
+    int ch;
+    int oldf;
+
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+
+    ch = getchar();
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
+
+    if (ch != EOF) {
+        ungetc(ch, stdin);
+        return 1;
+    }
+
+    return 0;
+}
+
 
 void resetcolor() {printf("\033[0m");}
+
+int putch(int ch) {
+    return putchar(ch);
+}
+
+int cputs(const char *str) {
+    if (!str) {
+        return EOF;
+    }
+
+    return fputs(str, stdout);
+}
+
+int cprintf(const char *fmt, ...) {
+    va_list args; //variable argument list
+    int result;
+
+    va_start(args, fmt);
+    result = vprintf(fmt, args);   // vprintf returns number of characters printed
+    va_end(args);
+
+    return result;
+}
 int main (){
     printf("\033[44;31m");
     printf("Hi!");
