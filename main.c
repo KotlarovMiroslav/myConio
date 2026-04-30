@@ -52,6 +52,10 @@ void clrscr(){
 }
 
 void gotoxy(int x, int y){
+    if (x <= 0 || y <= 0) {
+        return;
+    }
+
     printf("\033[%d;%dH",y,x);
 }
 
@@ -153,6 +157,10 @@ int cputs(const char *str) {
 int cprintf(const char *fmt, ...) {
     va_list args; //variable argument list
     int result;
+
+    if (!fmt) {
+        return EOF;
+    }
 
     va_start(args, fmt);
     result = vprintf(fmt, args);   // vprintf returns number of characters printed
