@@ -1,182 +1,81 @@
 #include <stdio.h>
-#include <termios.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <stdarg.h>
+#include "conio.h"
 
-#define BLACK         0
-#define BLUE          1
-#define GREEN         2
-#define CYAN          3
-#define RED           4
-#define MAGENTA       5
-#define BROWN         6
-#define LIGHTGRAY     7
-#define DARKGRAY      8
-#define LIGHTBLUE     9
-#define LIGHTGREEN   10
-#define LIGHTCYAN    11
-#define LIGHTRED     12
-#define LIGHTMAGENTA 13
-#define YELLOW       14
-#define WHITE        15
-
-void textcolor(int color) {
-    static const int ansi_fg[16] = {
-        30, 34, 32, 36, 31, 35, 33, 37,
-        90, 94, 92, 96, 91, 95, 93, 97
+int main(void)
+{
+    int colors[] = {
+        RED, YELLOW, LIGHTGREEN, LIGHTCYAN, LIGHTBLUE, LIGHTMAGENTA, WHITE
     };
-
-    if (color < 0 || color > 15) {
-        return;
-    }
-
-    printf("\033[%dm", ansi_fg[color]);
-}
-
-void textbackground(int color) {
-    static const int ansi_bg[16] = {
-        40, 44, 42, 46, 41, 45, 43, 47,
-        100, 104, 102, 106, 101, 105, 103, 107
+    int backgrounds[] = {
+        BLACK, BLUE, GREEN, CYAN, RED, MAGENTA, BROWN
     };
+    int steps = (int)(sizeof(colors) / sizeof(colors[0]));
+    int i;
 
-    if (color < 0 || color > 15) {
-        return;
-    }
-
-    printf("\033[%dm", ansi_bg[color]);
-}
-
-void clrscr(){
-    printf("\033[2J\033[H");
-}
-
-void gotoxy(int x, int y){
-    if (x <= 0 || y <= 0) {
-        return;
-    }
-
-    printf("\033[%d;%dH",y,x);
-}
-
-void wherex(){
-    int x, y;
-    printf("\033[6n");
-    scanf("\033[%d;%dR", &y, &x);
-    printf("Current X: %d\n", x);
-}
-void wherey(){
-    int x, y;
-    printf("\033[6n");
-    scanf("\033[%d;%dR", &y, &x);
-    printf("Current Y: %d\n", y);
-}
-
-void deline(){
-    printf("\033[M");
-}
-void insline(){
-    printf("\033[L");
-}
-void highvideo(){
-    printf("\033[1m");
-}
-
-void lowvideo(){
-    printf("\033[2m");
-}
-
-int getch() {
-    struct termios oldt, newt;
-    int ch;
-
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    ch = getchar();
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-    return ch;
-}
-
-int getche() {
-    struct termios oldt, newt;
-    int ch;
-
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt.c_lflag &= ~ICANON;   
-    newt.c_lflag |= ECHO;      
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    ch = getchar();
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-    return ch; 
-}
-
-int kbhit() {
-    struct termios oldt, newt;
-    int ch;
-    int oldf;
-
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-
-    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
-    fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
-
-    ch = getchar();
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-    fcntl(STDIN_FILENO, F_SETFL, oldf);
-
-    if (ch != EOF) {
-        ungetc(ch, stdin);
-        return 1;
-    }
-
-    return 0;
-}
-
-
-void resetcolor() {printf("\033[0m");}
-
-int putch(int ch) {
-    return putchar(ch);
-}
-
-int cputs(const char *str) {
-    if (!str) {
-        return EOF;
-    }
-
-    return fputs(str, stdout);
-}
-
-int cprintf(const char *fmt, ...) {
-    va_list args; //variable argument list
-    int result;
-
-    if (!fmt) {
-        return EOF;
-    }
-
-    va_start(args, fmt);
-    result = vprintf(fmt, args);   // vprintf returns number of characters printed
-    va_end(args);
-
-    return result;
-}
-int main (){
-    printf("\033[44;31m");
-    printf("Hi!");
-    printf("\033[0m\n");
     clrscr();
-    gotoxy(20,10);
-    textcolor(BLACK);
-    textbackground(WHITE);
-    printf("TestCase\n");
-    
+    highvideo();
+    textcolor(YELLOW);
+    gotoxy(10, 2);
+    cputs("Demo: proverka na funkciite ot conio.h");
+    resetcolor();
+
+    textcolor(LIGHTGRAY);
+    gotoxy(8, 4);
+    cputs("Tekstat shte smenya poziciya, cvyat i fon.");
+    gotoxy(8, 5);
+    cputs("Sled animaciyata shte ima test na putch, cprintf, getche i getch.");
+
+    for (i = 0; i < steps; i++) {
+        textcolor(colors[i]);
+        textbackground(backgrounds[i]);
+        gotoxy(10 + i * 7, 8 + i);
+        cprintf(" Step %d ", i + 1);
+        resetcolor();
+        sleep(1);
+    }
+
+    gotoxy(8, 17);
+    textcolor(WHITE);
+    textbackground(BLUE);
+    cputs(" textcolor + textbackground + gotoxy rabotyat ");
+    resetcolor();
+
+    gotoxy(8, 19);
+    highvideo();
+    textcolor(LIGHTGREEN);
+    cputs("highvideo: yark tekst");
+    resetcolor();
+
+    gotoxy(8, 20);
+    lowvideo();
+    textcolor(LIGHTGREEN);
+    cputs("lowvideo: priglushen tekst");
+    resetcolor();
+
+    gotoxy(8, 22);
+    cputs("putch test: ");
+    putch('O');
+    putch('K');
+    putch('!');
+
+    gotoxy(8, 24);
+    textcolor(LIGHTCYAN);
+    cprintf("cprintf test: chislo=%d, tekst=%s", 123, "uspeshno");
+    resetcolor();
+
+    gotoxy(8, 26);
+    cputs("getche test - natisni edin klavish: ");
+    getche();
+
+    gotoxy(8, 28);
+    cputs("getch test - natisni edin klavish za krai (nyama da se pokazhe): ");
+    getch();
+
+    resetcolor();
+    clrscr();
+    gotoxy(1, 1);
+    cputs("Demo priklyuchi uspeshno.\n");
+
     return 0;
 }
