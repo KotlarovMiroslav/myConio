@@ -6,6 +6,8 @@
 #include <sys/select.h>
 #include "conio.h"
 
+static int read_with_timeout(unsigned char *ch);
+
 void textcolor(int color) {
     static const int ansi_fg[16] = {
         30, 34, 32, 36, 31, 35, 33, 37,
@@ -44,17 +46,56 @@ void gotoxy(int x, int y){
     printf("\033[%d;%dH",y,x);
 }
 
-void wherex(){
-    int x, y;
+static int cursor_position(int *x, int *y)
+{
+    struct termios oldt, newt;
+    char response[32];
+    unsigned char ch;
+    int i = 0;
+
+    if (tcgetattr(STDIN_FILENO, &oldt) != 0) {
+        return 0;
+    }
+
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
     printf("\033[6n");
-    scanf("\033[%d;%dR", &y, &x);
-    printf("Current X: %d\n", x);
+    fflush(stdout);
+
+    while (i < (int)sizeof(response) - 1 && read_with_timeout(&ch)) {
+        response[i++] = (char)ch;
+
+        if (ch == 'R') {
+            break;
+        }
+    }
+
+    response[i] = '\0';
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+
+    return sscanf(response, "\033[%d;%dR", y, x) == 2;
 }
-void wherey(){
+
+int wherex(){
     int x, y;
-    printf("\033[6n");
-    scanf("\033[%d;%dR", &y, &x);
-    printf("Current Y: %d\n", y);
+
+    if (cursor_position(&x, &y)) {
+        return x;
+    }
+
+    return -1;
+}
+
+int wherey(){
+    int x, y;
+
+    if (cursor_position(&x, &y)) {
+        return y;
+    }
+
+    return -1;
 }
 
 void deline(){
