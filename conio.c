@@ -3,23 +3,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdarg.h>
-
-#define BLACK         0
-#define BLUE          1
-#define GREEN         2
-#define CYAN          3
-#define RED           4
-#define MAGENTA       5
-#define BROWN         6
-#define LIGHTGRAY     7
-#define DARKGRAY      8
-#define LIGHTBLUE     9
-#define LIGHTGREEN   10
-#define LIGHTCYAN    11
-#define LIGHTRED     12
-#define LIGHTMAGENTA 13
-#define YELLOW       14
-#define WHITE        15
+#include <sys/select.h>
+#include "conio.h"
 
 void textcolor(int color) {
     static const int ansi_fg[16] = {
@@ -86,6 +71,205 @@ void lowvideo(){
     printf("\033[2m");
 }
 
+static int read_with_timeout(unsigned char *ch)
+{
+    fd_set set;
+    struct timeval timeout;
+
+    FD_ZERO(&set);
+    FD_SET(STDIN_FILENO, &set);
+
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 50000;
+
+    if (select(STDIN_FILENO + 1, &set, NULL, NULL, &timeout) <= 0) {
+        return 0;
+    }
+
+    return read(STDIN_FILENO, ch, 1) == 1;
+}
+
+static int csi_key_from_final(unsigned char final, int number)
+{
+    switch (final) {
+        case 'A':
+            return KEY_UP;
+        case 'B':
+            return KEY_DOWN;
+        case 'C':
+            return KEY_RIGHT;
+        case 'D':
+            return KEY_LEFT;
+        case 'H':
+            return KEY_HOME;
+        case 'F':
+            return KEY_END;
+        case '~':
+            switch (number) {
+                case 1:
+                case 7:
+                    return KEY_HOME;
+                case 2:
+                    return KEY_INSERT;
+                case 3:
+                    return KEY_DELETE;
+                case 4:
+                case 8:
+                    return KEY_END;
+                case 5:
+                    return KEY_PAGEUP;
+                case 6:
+                    return KEY_PAGEDOWN;
+                case 11:
+                    return KEY_F1;
+                case 12:
+                    return KEY_F2;
+                case 13:
+                    return KEY_F3;
+                case 14:
+                    return KEY_F4;
+                case 15:
+                    return KEY_F5;
+                case 17:
+                    return KEY_F6;
+                case 18:
+                    return KEY_F7;
+                case 19:
+                    return KEY_F8;
+                case 20:
+                    return KEY_F9;
+                case 21:
+                    return KEY_F10;
+                case 23:
+                    return KEY_F11;
+                case 24:
+                    return KEY_F12;
+                default:
+                    return 27;
+            }
+        default:
+            return 27;
+    }
+}
+
+static int ss3_key(unsigned char ch)
+{
+    switch (ch) {
+        case 'A':
+            return KEY_UP;
+        case 'B':
+            return KEY_DOWN;
+        case 'C':
+            return KEY_RIGHT;
+        case 'D':
+            return KEY_LEFT;
+        case 'H':
+            return KEY_HOME;
+        case 'F':
+            return KEY_END;
+        case 'P':
+            return KEY_F1;
+        case 'Q':
+            return KEY_F2;
+        case 'R':
+            return KEY_F3;
+        case 'S':
+            return KEY_F4;
+        default:
+            return 27;
+    }
+}
+
+static int old_linux_console_key(unsigned char ch)
+{
+    switch (ch) {
+        case 'A':
+            return KEY_F1;
+        case 'B':
+            return KEY_F2;
+        case 'C':
+            return KEY_F3;
+        case 'D':
+            return KEY_F4;
+        case 'E':
+            return KEY_F5;
+        default:
+            return 27;
+    }
+}
+
+static int csi_key(void)
+{
+    unsigned char ch;
+    int number = 0;
+
+    if (!read_with_timeout(&ch)) {
+        return 27;
+    }
+
+    if (ch == '[') {
+        if (!read_with_timeout(&ch)) {
+            return 27;
+        }
+
+        return old_linux_console_key(ch);
+    }
+
+    if (ch < '0' || ch > '9') {
+        return csi_key_from_final(ch, 0);
+    }
+
+    while (ch >= '0' && ch <= '9') {
+        number = number * 10 + (ch - '0');
+
+        if (!read_with_timeout(&ch)) {
+            return 27;
+        }
+    }
+
+    if (ch == ';') {
+        do {
+            if (!read_with_timeout(&ch)) {
+                return 27;
+            }
+        } while ((ch >= '0' && ch <= '9') || ch == ';');
+    }
+
+    return csi_key_from_final(ch, number);
+}
+
+static int read_key(void)
+{
+    unsigned char ch;
+    unsigned char second;
+
+    if (read(STDIN_FILENO, &ch, 1) != 1) {
+        return EOF;
+    }
+
+    if (ch != 27) {
+        return ch;
+    }
+
+    if (!read_with_timeout(&second)) {
+        return 27;
+    }
+
+    if (second == '[') {
+        return csi_key();
+    }
+
+    if (second == 'O') {
+        if (!read_with_timeout(&ch)) {
+            return 27;
+        }
+
+        return ss3_key(ch);
+    }
+
+    return 27;
+}
+
 int getch() {
     struct termios oldt, newt;
     int ch;
@@ -94,7 +278,7 @@ int getch() {
     newt = oldt;
     newt.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    ch = getchar();
+    ch = read_key();
 
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
     return ch;
@@ -105,11 +289,17 @@ int getche() {
     int ch;
 
     tcgetattr(STDIN_FILENO, &oldt);
-    newt.c_lflag &= ~ICANON;   
-    newt.c_lflag |= ECHO;      
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    ch = getchar();
+    ch = read_key();
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+
+    if (ch >= 0 && ch < 256) {
+        putchar(ch);
+        fflush(stdout);
+    }
+
     return ch; 
 }
 
